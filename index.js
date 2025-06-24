@@ -86,7 +86,7 @@ function startRandomVC(){
         const randChannel = channels[Math.floor(Math.random() * channels.length)];
         console.log(`[LOG] Joining ${randChannel.name}...`);
         await playAudioInVC(randChannel);
-    }, 1000*60*0.5);
+    }, 1000*60*process.env.threshold);
 }
 
 // Startup
