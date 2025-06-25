@@ -1,14 +1,11 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
-import { Client, Events, GatewayIntentBits } from 'discord.js';
+import { Client, Events, GatewayIntentBits, Collection, MessageFlags, REST, Routes } from 'discord.js';
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } from '@discordjs/voice';
+import { pathToFileURL } from 'url';
 import path from 'path';
 import fs from 'fs';
-import nacl from 'tweetnacl';
-import express from 'express';
-import parser from 'body-parser';
-import axios from 'axios';
 
 var active = true;
 var voiceLines = [];
@@ -23,64 +20,37 @@ const client = new Client({
     ]
 })
 
+client.commands = new Collection();
+const commands = [];
+const commandPath = path.join(path.resolve(), 'commands');
+const commandFiles = fs.readdirSync(commandPath);
+
+for(const file of commandFiles){
+    const filePath = path.join(commandPath, file);
+    const commandModule = await import(pathToFileURL(filePath));
+    const command = commandModule.default;
+
+    if('data' in command && 'execute' in command){
+        commands.push(command.data.toJSON());
+        client.commands.set(command.data.name, command);
+    }else {
+        console.warn(`[WARN] Missing data or execute on command at ${filePath}`);
+    }
+}
+
 // Networking stuff...
-/* Not working / Still WIP
-const app = express();
-const PORT = 3000;
-const PUBLIC_KEY = process.env.PUBLIC_KEY;
+const rest = new REST().setToken(process.env.BOT_TOKEN);
+try{
+    console.log(`[LOG] Started refreshing ${commands.length} application (/) commands.`);
+    await rest.put(
+        Routes.applicationCommands(process.env.APP_ID),
+        { body: commands },
+    );
 
-app.use(parser.json({
-    verify: (req, res, buf) => {
-        req.rawBody = buf.toString('utf8');
-    }
-}));
-
-app.post("/interactions", async (req, res) => {
-    const signature = req.get("X-Signature-Ed25519");
-    const timestamp = req.get("X-Signature-Timestamp");
-    const body = req.rawBody;
-    const isVerified = nacl.sign.detached.verify(
-        Buffer.from(timestamp + body),
-        Buffer.from(signature, 'hex'),
-        Buffer.from(PUBLIC_KEY, "hex")
-    )
-
-    if(!isVerified)
-        return res.status(401).end('invalid request signature');
-
-    try {
-        const api_ver = 10;
-        const url = `https://discord.com/api/v${api_ver}/applications/${process.env.APP_ID}/commands`;
-        const json = {
-            name: "start",
-            type: 1,
-            description: "Enable the RandomVC feature",
-            options: [
-                {
-                    name: "state",
-                    description: "Turn this feature On or Off",
-                    type: 5,
-                    required: true,
-                }
-            ]
-        }
-
-        const headers = {
-            Authorization: `Bot ${process.env.BOT_TOKEN}`,
-            "Content-Type": "application/json",
-        }
-
-        axios.post(url, json, { headers }).then( response => {
-            console.log("[LOG] Command Created: ", response.data);
-        }).catch( error => {
-            console.error("[ERR] Error Creating Command: ", error.response?.data || error.message);
-        })
-
-    }catch (error){
-        console.error("[ERR] Error sending POST request: ", error.response?.data || error.message);
-    }
-})
-*/
+    console.log('[LOG] Successfully reloaded application (/) commands.');
+}catch (error){
+    console.error("[ERR] Error sending commands: ", error);
+}
 
 function getVoiceLinesFiles(){
     const vlPath = path.join(path.resolve(), "voices");
@@ -175,19 +145,40 @@ client.on(Events.MessageCreate, async (message) => {
 })
 
 // Start/Stop RandomVC()
-client.on(Events.MessageCreate, async (message) => {
-    if(!message?.author.bot && message.content == "!start"){
-        console.log("[LOG] Starting RandomVC()");
-        message.channel.send("Starting RandomVC()");
-        active = true;
-    }else if(!message?.author.bot && message.content == "!stop"){
-        console.log("[LOG] Stopping RandomVC()");
-        message.channel.send("Stopping RandomVC()");
-        active = false;
+client.on(Events.InteractionCreate, async (interaction) =>{
+    if(!interaction.isChatInputCommand())
+        return;
+
+    const command = interaction.client.commands.get(interaction.commandName);
+    if (!command){
+        console.error(`[ERR] No ${interaction.commandName} command found.`);
+        return;
     }
+
+    try {
+        await command.execute(interaction);
+    }catch(error){
+        console.error(`[ERR] Command error: `, error);
+        if(interaction.replied || interaction.deferred){
+            await interaction.followUp({ content: "I have mistaken you. There has been an error.", flags: MessageFlags.Ephemeral});
+        }else {
+            await interaction.reply({ content: "I have mistaken you. There has been an error.", flags: MessageFlags.Ephemeral});
+        }
+    }
+
+    console.log(`[LOG] Command: ${interaction?.commandName}`);
 })
 
+// client.on(Events.MessageCreate, async (message) => {
+//     if(!message?.author.bot && message.content == "!start"){
+//         console.log("[LOG] Starting RandomVC()");
+//         message.channel.send("Starting RandomVC()");
+//         active = true;
+//     }else if(!message?.author.bot && message.content == "!stop"){
+//         console.log("[LOG] Stopping RandomVC()");
+//         message.channel.send("Stopping RandomVC()");
+//         active = false;
+//     }
+// })
+
 await client.login(process.env.BOT_TOKEN);
-app.listen(PORT, () => {
-    console.log(`[LOG] Listening on port ${PORT}`);
-})
