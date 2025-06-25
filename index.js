@@ -5,6 +5,10 @@ import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } from '@discordjs/voice';
 import path from 'path';
 import fs from 'fs';
+import nacl from 'tweetnacl';
+import express from 'express';
+import parser from 'body-parser';
+import axios from 'axios';
 
 var active = true;
 var voiceLines = [];
@@ -18,6 +22,65 @@ const client = new Client({
         GatewayIntentBits.GuildVoiceStates,
     ]
 })
+
+// Networking stuff...
+/* Not working / Still WIP
+const app = express();
+const PORT = 3000;
+const PUBLIC_KEY = process.env.PUBLIC_KEY;
+
+app.use(parser.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf.toString('utf8');
+    }
+}));
+
+app.post("/interactions", async (req, res) => {
+    const signature = req.get("X-Signature-Ed25519");
+    const timestamp = req.get("X-Signature-Timestamp");
+    const body = req.rawBody;
+    const isVerified = nacl.sign.detached.verify(
+        Buffer.from(timestamp + body),
+        Buffer.from(signature, 'hex'),
+        Buffer.from(PUBLIC_KEY, "hex")
+    )
+
+    if(!isVerified)
+        return res.status(401).end('invalid request signature');
+
+    try {
+        const api_ver = 10;
+        const url = `https://discord.com/api/v${api_ver}/applications/${process.env.APP_ID}/commands`;
+        const json = {
+            name: "start",
+            type: 1,
+            description: "Enable the RandomVC feature",
+            options: [
+                {
+                    name: "state",
+                    description: "Turn this feature On or Off",
+                    type: 5,
+                    required: true,
+                }
+            ]
+        }
+
+        const headers = {
+            Authorization: `Bot ${process.env.BOT_TOKEN}`,
+            "Content-Type": "application/json",
+        }
+
+        axios.post(url, json, { headers }).then( response => {
+            console.log("[LOG] Command Created: ", response.data);
+        }).catch( error => {
+            console.error("[ERR] Error Creating Command: ", error.response?.data || error.message);
+        })
+
+    }catch (error){
+        console.error("[ERR] Error sending POST request: ", error.response?.data || error.message);
+    }
+})
+*/
 
 function getVoiceLinesFiles(){
     const vlPath = path.join(path.resolve(), "voices");
@@ -124,4 +187,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
 })
 
-await client.login(process.env.DISCORD_TOKEN);
+await client.login(process.env.BOT_TOKEN);
+app.listen(PORT, () => {
+    console.log(`[LOG] Listening on port ${PORT}`);
+})
