@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js'
+import { vars } from '../values.js'
 
 export default {
     data: new SlashCommandBuilder()
@@ -6,15 +7,15 @@ export default {
         .setDescription('Set the state of the RandomVC feature')
         .addBooleanOption(option => 
             option
-            .setName('toggle')
+            .setName('set')
             .setDescription('Toggle this feature on/off')
             .setRequired(true)
         ),
     async execute(interaction){
-        const value = interaction.options.getBoolean('toggle');
+        const value = interaction.options.getBoolean('set');
 
-        global.active = value;
+        vars.active = value;
 
-        await interaction.reply(`RandomVC() feature set to ${global.active}`);
+        await interaction.reply(`RandomVC() feature set to ${vars.active}`);
     }
 }

@@ -4,11 +4,12 @@ dotenv.config()
 import { Client, Events, GatewayIntentBits, Collection, MessageFlags, REST, Routes } from 'discord.js';
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } from '@discordjs/voice';
 import { pathToFileURL } from 'url';
+import { vars } from './values.js';
 import path from 'path';
 import fs from 'fs';
 
-var active = true;
-var voiceLines = [];
+vars.threshold = process.env.threshold;
+let voiceLines = [];
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -102,24 +103,28 @@ async function playAudioInVC(channel){
 
     console.log("[LOG] Playing audio...")
     connection.subscribe(player);
-    player.play(resource);
+     player.play(resource);
 
     player.on(AudioPlayerStatus.Idle, () => {
         connection.destroy(); // Leave when done
     });
 }
 
-function startRandomVC(){
-    setInterval(async () => {
-        if(!active) return;
+async function startRandomVC (){
+    console.debug(`[DEBUG]: Active: ${vars.active}, Threshold: ${vars.threshold}`);
 
-        const channels = await getActiveVC();
-        if(channels.length == 0) return;
+    if(!vars.active) return;
 
-        const randChannel = channels[Math.floor(Math.random() * channels.length)];
-        console.log(`[LOG] Joining ${randChannel.name}...`);
-        await playAudioInVC(randChannel);
-    }, 1000*60*process.env.threshold);
+    const channels = await getActiveVC();
+    if(channels.length == 0) return;
+
+    const randChannel = channels[Math.floor(Math.random() * channels.length)];
+    console.log(`[LOG] Joining ${randChannel.name}...`);
+    await playAudioInVC(randChannel);
+
+    let delay = 1000*vars.threshold;
+
+    setTimeout(startRandomVC, delay);
 }
 
 // Startup
